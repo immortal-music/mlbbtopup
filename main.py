@@ -21,13 +21,16 @@ except Exception as e:
 
 # Collections
 def get_collection(collection_name):
-    """Get MongoDB collection with proper None checking"""
+    """Get MongoDB collection with proper error handling"""
     if db is None:
         return None
     try:
-        return db[collection_name]
+        collection = db[collection_name]
+        # Check if collection exists by attempting a simple operation
+        collection.find_one()  # This will raise an exception if collection doesn't exist
+        return collection
     except Exception as e:
-        print(f"Error getting collection {collection_name}: {e}")
+        print(f"Error accessing collection {collection_name}: {e}")
         return None
 
 # Authorized users - only these users can use the bot
@@ -101,13 +104,12 @@ def simple_reply(message_text):
 # MongoDB Data Management Functions
 def load_data():
     """Load data from MongoDB or fallback to file"""
-    # Check if MongoDB connection is available
     if db is None:
         return load_data_from_file()
     
     try:
         users_collection = get_collection("users")
-        if users_collection is None:
+        if users_collection is None:  # Change this line
             return load_data_from_file()
             
         data = {
@@ -218,16 +220,33 @@ def save_data_to_file(data):
 # MongoDB specific functions
 def load_authorized_users_from_db():
     """Load authorized users from MongoDB"""
-    if db is None:  # Change this line
+    if db is None:
         return []
     try:
         auth_collection = get_collection("authorized_users")
-        if auth_collection:
-            doc = auth_collection.find_one({"type": "authorized_list"})
-            return doc.get("users", []) if doc else []
-    except:
-        pass
-    return []
+        if auth_collection is None:  # Change this line
+            return []
+        doc = auth_collection.find_one({"type": "authorized_list"})
+        return doc.get("users", []) if doc else []
+    except Exception as e:
+        print(f"Error loading authorized users from DB: {e}")
+        return []
+
+def load_admins_from_db():
+    """Load admins from MongoDB"""
+    if db is None:
+        return [ADMIN_ID]
+    try:
+        admins_collection = get_collection("admins")
+        if admins_collection is None:  # Change this line
+            return [ADMIN_ID]
+        doc = admins_collection.find_one({"type": "admin_list"})
+        return doc.get("admin_ids", [ADMIN_ID]) if doc else [ADMIN_ID]
+    except Exception as e:
+        print(f"Error loading admins from DB: {e}")
+        return [ADMIN_ID]
+
+# ... and all other functions that use get_collection()
 
 def save_authorized_users_to_db(users_list):
     """Save authorized users to MongoDB"""
@@ -315,16 +334,31 @@ def load_user_orders(user_id):
 
 def save_user_orders(user_id, orders_list):
     """Save user orders to MongoDB"""
-    if db is None:  # Change this line
+    if db is None:
         return
     try:
         orders_collection = get_collection("orders")
-        if orders_collection:
-            # Remove existing orders for this user
-            orders_collection.delete_many({"user_id": str(user_id)})
-            # Insert new orders
-            if orders_list:
-                orders_collection.insert_many(orders_list)
+        if orders_collection is None:  # Change this line
+            return
+            
+        # Remove existing orders for this user
+        orders_collection.delete_many({"user_id": str(user_id)})
+        # Insert new orders
+        if orders_list:
+            # Convert any non-serializable objects to serializable format
+            serializable_orders = []
+            for order in orders_list:
+                serializable_order = {}
+                for key, value in order.items():
+                    if isinstance(value, (str, int, float, bool, type(None))):
+                        serializable_order[key] = value
+                    elif isinstance(value, datetime):
+                        serializable_order[key] = value.isoformat()
+                    else:
+                        serializable_order[key] = str(value)
+                serializable_orders.append(serializable_order)
+            
+            orders_collection.insert_many(serializable_orders)
     except Exception as e:
         print(f"Error saving orders to DB: {e}")
 
@@ -343,16 +377,31 @@ def load_user_topups(user_id):
 
 def save_user_topups(user_id, topups_list):
     """Save user topups to MongoDB"""
-    if db is None:  # Change this line
+    if db is None:
         return
     try:
         topups_collection = get_collection("topups")
-        if topups_collection:
-            # Remove existing topups for this user
-            topups_collection.delete_many({"user_id": str(user_id)})
-            # Insert new topups
-            if topups_list:
-                topups_collection.insert_many(topups_list)
+        if topups_collection is None:  # Change this line
+            return
+            
+        # Remove existing topups for this user
+        topups_collection.delete_many({"user_id": str(user_id)})
+        # Insert new topups
+        if topups_list:
+            # Convert any non-serializable objects to serializable format
+            serializable_topups = []
+            for topup in topups_list:
+                serializable_topup = {}
+                for key, value in topup.items():
+                    if isinstance(value, (str, int, float, bool, type(None))):
+                        serializable_topup[key] = value
+                    elif isinstance(value, datetime):
+                        serializable_topup[key] = value.isoformat()
+                    else:
+                        serializable_topup[key] = str(value)
+                serializable_topups.append(serializable_topup)
+            
+            topups_collection.insert_many(serializable_topups)
     except Exception as e:
         print(f"Error saving topups to DB: {e}")
 
