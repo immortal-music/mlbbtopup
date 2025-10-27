@@ -8,7 +8,7 @@ from pymongo import MongoClient
 import certifi
 
 # MongoDB Connection
-MONGODB_URI = "mongodb+srv://wanglin:wanglin@wanglin.ppt93bd.mongodb.net/?retryWrites=true&w=majority"
+MONGODB_URI = "mongodb+srv://wanglinmongodb:wanglin@cluster0.tny5vhz.mongodb.net/?retryWrites=true&w=majority"
 
 try:
     client = MongoClient(MONGODB_URI, tlsCAFile=certifi.where())
@@ -21,9 +21,14 @@ except Exception as e:
 
 # Collections
 def get_collection(collection_name):
-    if db:
+    """Get MongoDB collection with proper None checking"""
+    if db is None:
+        return None
+    try:
         return db[collection_name]
-    return None
+    except Exception as e:
+        print(f"Error getting collection {collection_name}: {e}")
+        return None
 
 # Authorized users - only these users can use the bot
 AUTHORIZED_USERS = set()
@@ -96,7 +101,8 @@ def simple_reply(message_text):
 # MongoDB Data Management Functions
 def load_data():
     """Load data from MongoDB or fallback to file"""
-    if not db:
+    # Check if MongoDB connection is available
+    if db is None:
         return load_data_from_file()
     
     try:
@@ -166,7 +172,7 @@ def load_data_from_file():
 
 def save_data(data):
     """Save data to MongoDB or fallback to file"""
-    if not db:
+    if db is None:  # Change this line
         return save_data_to_file(data)
     
     try:
@@ -212,7 +218,7 @@ def save_data_to_file(data):
 # MongoDB specific functions
 def load_authorized_users_from_db():
     """Load authorized users from MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return []
     try:
         auth_collection = get_collection("authorized_users")
@@ -225,7 +231,7 @@ def load_authorized_users_from_db():
 
 def save_authorized_users_to_db(users_list):
     """Save authorized users to MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return
     try:
         auth_collection = get_collection("authorized_users")
@@ -240,7 +246,7 @@ def save_authorized_users_to_db(users_list):
 
 def load_admins_from_db():
     """Load admins from MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return [ADMIN_ID]
     try:
         admins_collection = get_collection("admins")
@@ -253,7 +259,7 @@ def load_admins_from_db():
 
 def save_admins_to_db(admin_list):
     """Save admins to MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return
     try:
         admins_collection = get_collection("admins")
@@ -268,7 +274,7 @@ def save_admins_to_db(admin_list):
 
 def load_prices():
     """Load prices from MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return {}
     try:
         prices_collection = get_collection("prices")
@@ -281,7 +287,7 @@ def load_prices():
 
 def save_prices(prices_dict):
     """Save prices to MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return
     try:
         prices_collection = get_collection("prices")
@@ -296,7 +302,7 @@ def save_prices(prices_dict):
 
 def load_user_orders(user_id):
     """Load user orders from MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return []
     try:
         orders_collection = get_collection("orders")
@@ -309,7 +315,7 @@ def load_user_orders(user_id):
 
 def save_user_orders(user_id, orders_list):
     """Save user orders to MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return
     try:
         orders_collection = get_collection("orders")
@@ -324,7 +330,7 @@ def save_user_orders(user_id, orders_list):
 
 def load_user_topups(user_id):
     """Load user topups from MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return []
     try:
         topups_collection = get_collection("topups")
@@ -337,7 +343,7 @@ def load_user_topups(user_id):
 
 def save_user_topups(user_id, topups_list):
     """Save user topups to MongoDB"""
-    if not db:
+    if db is None:  # Change this line
         return
     try:
         topups_collection = get_collection("topups")
