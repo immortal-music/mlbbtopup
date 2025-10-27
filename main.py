@@ -58,6 +58,8 @@ payment_info = {
 
 def is_user_authorized(user_id):
     """Check if user is authorized to use the bot"""
+    # Always ensure AUTHORIZED_USERS is loaded
+    load_authorized_users()
     return str(user_id) in AUTHORIZED_USERS or int(user_id) == ADMIN_ID
 
 async def is_bot_admin_in_group(bot, chat_id):
@@ -406,16 +408,29 @@ def save_user_topups(user_id, topups_list):
         print(f"Error saving topups to DB: {e}")
 
 def load_authorized_users():
-    """Load authorized users from data file"""
+    """Load authorized users from data file with proper initialization"""
     global AUTHORIZED_USERS
-    data = load_data()
-    AUTHORIZED_USERS = set(data.get("authorized_users", []))
+    try:
+        data = load_data()
+        authorized_list = data.get("authorized_users", [])
+        
+        # Ensure it's a list of strings for consistent comparison
+        AUTHORIZED_USERS = set(str(user_id) for user_id in authorized_list)
+        
+        print(f"✅ Loaded {len(AUTHORIZED_USERS)} authorized users: {AUTHORIZED_USERS}")
+    except Exception as e:
+        print(f"❌ Error loading authorized users: {e}")
+        AUTHORIZED_USERS = set()
 
 def save_authorized_users():
     """Save authorized users to data file"""
-    data = load_data()
-    data["authorized_users"] = list(AUTHORIZED_USERS)
-    save_data(data)
+    try:
+        data = load_data()
+        data["authorized_users"] = list(AUTHORIZED_USERS)
+        save_data(data)
+        print(f"✅ Saved {len(AUTHORIZED_USERS)} authorized users")
+    except Exception as e:
+        print(f"❌ Error saving authorized users: {e}")
 
 def validate_game_id(game_id):
     """Validate MLBB Game ID (6-10 digits)"""
@@ -566,12 +581,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or "-"
     name = f"{user.first_name} {user.last_name or ''}".strip()
 
-    # Load authorized users
+    # Always load authorized users first
     load_authorized_users()
+    
+    print(f"🔍 Checking authorization for user {user_id}...")
+    print(f"📋 Current authorized users: {AUTHORIZED_USERS}")
 
     # Check if user is authorized
     if not is_user_authorized(user_id):
-        #board Create keyboard with Register button only
+        # Create keyboard with Register button only
         keyboard = [
             [InlineKeyboardButton("📝 Register တောင်းဆိုမယ်", callback_data="request_register")]
         ]
@@ -587,11 +605,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "***• သို့မဟုတ်*** /register ***command သုံးပါ။***\n"
             "***• Owner က approve လုပ်တဲ့အထိ စောင့်ပါ။***\n\n"
             "✅ ***Owner က approve လုပ်ပြီးမှ bot ကို အသုံးပြုနိုင်ပါမယ်။***\n\n",
-
             parse_mode="Markdown",
             reply_markup=reply_markup
         )
         return
+
+    print(f"✅ User {user_id} is authorized, proceeding with start command...")
 
     data = load_data()
 
@@ -649,6 +668,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         # If error getting photo, send text only
         await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+async def debug_auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Debug command to check authorization status"""
+    user_id = str(update.effective_user.id)
+    
+    # Only allow admins to use this command
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Admin များသာ debug command သုံးနိုင်ပါတယ်!")
+        return
+    
+    load_authorized_users()
+    data = load_data()
+    
+    debug_msg = (
+        f"🔧 ***Debug Authorization Info***\n\n"
+        f"👤 ***Your ID:*** `{user_id}`\n"
+        f"🔑 ***Is Admin:*** {is_admin(user_id)}\n"
+        f"✅ ***Is Authorized:*** {is_user_authorized(user_id)}\n\n"
+        f"📊 ***Authorization Stats:***\n"
+        f"• Total Authorized Users: {len(AUTHORIZED_USERS)}\n"
+        f"• Total Users in DB: {len(data['users'])}\n"
+        f"• Authorized Users List: {list(AUTHORIZED_USERS)}\n\n"
+        f"💾 ***Data Source:*** {'MongoDB' if db else 'File System'}"
+    )
+    
+    await update.message.reply_text(debug_msg, parse_mode="Markdown")
+
+# Add this handler to the main function
+application.add_handler(CommandHandler("debugauth", debug_auth_command))
 
 async def mmb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -3695,141 +3744,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(query.from_user.id)
     admin_name = query.from_user.first_name or "Admin"
 
-    # Handle payment method selection
-    if query.data.startswith("topup_pay_"):
-        parts = query.data.split("_")
-        payment_method = parts[2]  # kpay or wave
-        amount = int(parts[3])
-
-        # Update pending topup with payment method
-        if user_id in pending_topups:
-            pending_topups[user_id]["payment_method"] = payment_method
-
-        payment_name = "KBZ Pay" if payment_method == "kpay" else "Wave Money"
-        payment_num = payment_info['kpay_number'] if payment_method == "kpay" else payment_info['wave_number']
-        payment_acc_name = payment_info['kpay_name'] if payment_method == "kpay" else payment_info['wave_name']
-        payment_qr = payment_info.get('kpay_image') if payment_method == "kpay" else payment_info.get('wave_image')
-
-        # Send QR if available
-        if payment_qr:
-            try:
-                await query.message.reply_photo(
-                    photo=payment_qr,
-                    caption=f"📱 **{payment_name} QR Code**\n\n"
-                            f"📞 နံပါတ်: `{payment_num}`\n"
-                            f"👤 နာမည်: {payment_acc_name}",
-                    parse_mode="Markdown"
-                )
-            except:
-                pass
-
-        await query.edit_message_text(
-            f"💳 ***ငွေဖြည့်လုပ်ငန်းစဉ်***\n\n"
-            f"✅ ***ပမာဏ:*** `{amount:,} MMK`\n"
-            f"✅ ***Payment:*** {payment_name}\n\n"
-            f"***အဆင့် 3: ငွေလွှဲပြီး Screenshot တင်ပါ။***\n\n"
-            f"📱 {payment_name}\n"
-            f"📞 ***နံပါတ်:*** `{payment_num}`\n"
-            f"👤 ***အမည်:*** {payment_acc_name}\n\n"
-            f"⚠️ ***အရေးကြီးသော သတိပေးချက်:***\n"
-            f"***ငွေလွှဲ note/remark မှာ သင့်ရဲ့ {payment_name} အကောင့်နာမည်ကို ရေးပေးပါ။***\n"
-            f"***မရေးရင် ငွေဖြည့်မှု ငြင်းပယ်ခံရနိုင်ပါတယ်။***\n\n"
-            f"💡 ***ငွေလွှဲပြီးရင် screenshot ကို ဒီမှာ တင်ပေးပါ။***\n"
-            f"⏰ ***24 နာရီအတွင်း confirm လုပ်ပါမယ်။***\n\n"
-            f"ℹ️ ***ပယ်ဖျက်ရန် /cancel နှိပ်ပါ။***",
-            parse_mode="Markdown"
-        )
-        return
-
-    # Handle registration request button
-    elif query.data == "request_register":
-        # Call register logic directly instead of command
-        user = query.from_user
-        user_id = str(user.id)
-        username = user.username or "-"
-        name = f"{user.first_name} {user.last_name or ''}".strip()
-
-        # Load authorized users
-        load_authorized_users()
-
-        # Check if already authorized
-        if is_user_authorized(user_id):
-            await query.answer("✅ သင်သည် အသုံးပြုခွင့် ရပြီးသား ဖြစ်ပါတယ်!", show_alert=True)
-            return
-
-        # Send registration request to owner with approve button
-        keyboard = [[
-            InlineKeyboardButton("✅ Approve", callback_data=f"register_approve_{user_id}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"register_reject_{user_id}")
-        ]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        owner_msg = (
-            f"📝 ***Registration Request***\n\n"
-            f"👤 ***User Name:*** [{name}](tg://user?id={user_id})\n"
-            f"🆔 ***User ID:*** `{user_id}`\n"
-            f"📱 ***Username:*** @{username}\n"
-            f"⏰ ***Time:*** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            f"***အသုံးပြုခွင့် ပေးမလား?***"
-        )
-
-        try:
-            # Try to send user's profile photo first
-            try:
-                user_photos = await context.bot.get_user_profile_photos(user_id=int(user_id), limit=1)
-                if user_photos.total_count > 0:
-                    await context.bot.send_photo(
-                        chat_id=ADMIN_ID,
-                        photo=user_photos.photos[0][0].file_id,
-                        caption=owner_msg,
-                        parse_mode="Markdown",
-                        reply_markup=reply_markup
-                    )
-                else:
-                    await context.bot.send_message(
-                        chat_id=ADMIN_ID,
-                        text=owner_msg,
-                        parse_mode="Markdown",
-                        reply_markup=reply_markup
-                    )
-            except:
-                await context.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=owner_msg,
-                    parse_mode="Markdown",
-                    reply_markup=reply_markup
-                )
-        except Exception as e:
-            print(f"Error sending registration request to owner: {e}")
-
-        await query.answer("✅ Registration တောင်းဆိုမှု ပို့ပြီးပါပြီ!", show_alert=True)
-        try:
-            await query.edit_message_text(
-                "✅ ***Registration တောင်းဆိုမှု ပို့ပြီးပါပြီ!***\n\n"
-                "⏳ ***Owner က approve လုပ်တဲ့အထိ စောင့်ပါ။***\n"
-                "📞 ***အရေးပေါ်ဆိုရင် owner ကို ဆက်သွယ်ပါ။***\n\n"
-                f"🆔 ***သင့် User ID:*** `{user_id}`",
-                parse_mode="Markdown"
-            )
-        except:
-            pass
-        return
-
     # Handle registration approve (admins can approve)
-    elif query.data.startswith("register_approve_"):
+    if query.data.startswith("register_approve_"):
         if not is_admin(user_id):
             await query.answer("❌ Admin များသာ registration approve လုပ်နိုင်ပါတယ်!", show_alert=True)
             return
 
         target_user_id = query.data.replace("register_approve_", "")
+        
+        # Load current authorized users
         load_authorized_users()
-
+        
         if target_user_id in AUTHORIZED_USERS:
             await query.answer("ℹ️ User ကို approve လုပ်ပြီးပါပြီ!", show_alert=True)
             return
 
+        # Add to authorized users
         AUTHORIZED_USERS.add(target_user_id)
         save_authorized_users()
+        
+        print(f"✅ User {target_user_id} approved by {admin_name}. Current authorized users: {AUTHORIZED_USERS}")
 
         # Clear any restrictions
         if target_user_id in user_states:
@@ -3847,24 +3781,43 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-        # Notify user
+        # Notify user with proper authorization check
         try:
+            # Reload data to get user info
             data = load_data()
             user_name = data["users"].get(target_user_id, {}).get("name", "User")
 
+            # Ensure user exists in data
+            if target_user_id not in data["users"]:
+                data["users"][target_user_id] = {
+                    "name": user_name,
+                    "username": query.from_user.username or "-",
+                    "balance": 0,
+                    "orders": [],
+                    "topups": []
+                }
+                save_data(data)
+
             await context.bot.send_message(
                 chat_id=int(target_user_id),
-                text=f"🎉 Registration Approved!\n\n"
+                text=f"🎉 ***Registration Approved!***\n\n"
                      f"✅ Admin က သင့် registration ကို လက်ခံပါပြီ။\n\n"
-                     f"🚀 ယခုအခါ /start နှိပ်ပြီး bot ကို အသုံးပြုနိုင်ပါပြီ!"
+                     f"🚀 ယခုအခါ /start နှိပ်ပြီး bot ကို အသုံးပြုနိုင်ပါပြီ!\n\n"
+                     f"💡 ***Available Commands:***\n"
+                     f"• /mmb - Diamond ဝယ်ယူရန်\n"
+                     f"• /balance - လက်ကျန်ငွေ စစ်ရန်\n"
+                     f"• /topup - ငွေဖြည့်ရန်\n"
+                     f"• /price - ဈေးနှုန်းများ ကြည့်ရန်",
+                parse_mode="Markdown"
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"Error notifying user: {e}")
 
         # Notify admin group
         try:
             bot = Bot(token=BOT_TOKEN)
             if await is_bot_admin_in_group(bot, ADMIN_GROUP_ID):
+                data = load_data()
                 user_name = data["users"].get(target_user_id, {}).get("name", "Unknown")
                 group_msg = (
                     f"✅ ***Registration လက်ခံပြီး!***\n\n"
@@ -3875,8 +3828,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"#RegistrationApproved"
                 )
                 await bot.send_message(chat_id=ADMIN_GROUP_ID, text=group_msg, parse_mode="Markdown")
-        except:
-            pass
+        except Exception as e:
+            print(f"Error notifying group: {e}")
 
         await query.answer("✅ User approved!", show_alert=True)
         return
@@ -4835,6 +4788,7 @@ def main():
     # Command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("mmb", mmb_command))
+    application.add_handler(CommandHandler("debugauth", debug_auth_command))
     application.add_handler(CommandHandler("balance", balance_command))
     application.add_handler(CommandHandler("topup", topup_command))
     application.add_handler(CommandHandler("cancel", cancel_command))
