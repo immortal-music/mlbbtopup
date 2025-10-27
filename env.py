@@ -11,7 +11,7 @@ except FileNotFoundError:
     pass
 
 # Bot configuration
-BOT_TOKEN = (os.getenv("BOT_TOKEN","7988925435:AAE30e4vC5A2vHJoahphAA2bjsoFsyd8gJA"))
-ADMIN_ID = int(os.getenv("ADMIN_ID", "8197491717"))
-ADMIN_GROUP_ID = int(os.getenv("ADMIN_GROUP_ID", "-1002921388318"))
+BOT_TOKEN = (os.getenv("BOT_TOKEN","8257255279:AAFp6kNzbb-KGjAykevQeuteGci_uJ8Nwds"))
+ADMIN_ID = int(os.getenv("ADMIN_ID", "1318826936"))
+ADMIN_GROUP_ID = int(os.getenv("ADMIN_GROUP_ID", "-1002356385851"))
 DATA_FILE = "data.json"
