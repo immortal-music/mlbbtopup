@@ -8,7 +8,7 @@ from pymongo import MongoClient
 import certifi
 
 # MongoDB Connection
-MONGODB_URI = "mongodb+srv://wanglinmongodb:wanglin@cluster0.tny5vhz.mongodb.net/?retryWrites=true&w=majority"
+MONGODB_URI = "mongodb+srv://wanglin:wanglin@wanglin.ppt93bd.mongodb.net/?retryWrites=true&w=majority&appName=wanglin"
 
 try:
     client = MongoClient(MONGODB_URI, tlsCAFile=certifi.where())
