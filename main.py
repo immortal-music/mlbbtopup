@@ -40,11 +40,11 @@ bot_maintenance = {
 
 # Payment information
 payment_info = {
-    "kpay_number": "09678786528",
-    "kpay_name": "Ma May Phoo Wai",
+    "kpay_number": "09675323878",
+    "kpay_name": "pyae sone phyo",
     "kpay_image": None,  # Store file_id of KPay QR code image
-    "wave_number": "09673585480",
-    "wave_name": "Nine Nine",
+    "wave_number": "09770069402",
+    "wave_name": "pyae sone phyo",
     "wave_image": None   # Store file_id of Wave QR code image
 }
 
